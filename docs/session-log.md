@@ -421,3 +421,28 @@ checked lossless by rebuilding the original from the archive plus the live
 file. The live file dropped to about 400 lines. `CLAUDE.md`/`AGENTS.md`'s
 orientation text now says the log carries 2026-09-16 onward and mentions the
 half-month case.
+
+## 2026-09-26 — #535, #536: sweeping a dynamically-attached repo set
+
+A scheduled routine's prompt is written once, but the set of repos it's
+attached to can change over time via the routine's own config rather than
+by editing the prompt — a hardcoded `OWNER/REPO[, ...]` scope in the prompt
+text then goes stale. `commands/atlas-poll-and-review.md`'s argument-hint
+and a new "Sweeping a dynamically-attached repo set" section now cover this
+as a real, legitimate case, distinct from the issue #387 threat (an
+unbounded sweep of "every repo this session's credentials can reach"): the
+blast radius stays exactly as bounded, only the scope's *source* changes,
+from hand-typed in the prompt to read fresh each tick. One confirmed
+enumeration source, observed directly in a live scheduled-task session on
+Claude Code: the session's own system prompt carrying a literal
+"Repository Scope" section. Where a session surfaces that kind of
+declaration, the routine should read it at the start of each tick and pass
+it straight through as the command's explicit repo-scope argument, rather
+than omitting the scope or guessing at it; where a platform instead
+surfaces the attached set as local checkouts, each one's origin remote is
+an equivalent source. This is confirmed for that one session shape, not
+asserted for every routine/platform surface, so the text says to check the
+specific session's own system prompt before relying on it.
+`docs/runbooks/pr-review-automation.md`'s §4 (the poll-driven Model B) now
+points at the same guidance for its own dynamically-attached case, keeping
+the two docs in sync.
