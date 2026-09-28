@@ -209,6 +209,14 @@
         "Recognizes both resources — the file handle and the pooled connection — are acquired via context managers that release them on all paths, including exceptions raised inside either block",
         "Does not invent a resource-leak finding where cleanup is already correctly scoped"
       ]
+    },
+    {
+      "query": "Review this change:\n```python\n@dataclass\nclass ParseResult:\n    success: bool\n    data: dict | None\n    error: str | None\n\ndef parse_webhook_payload(raw: bytes) -> ParseResult:\n    try:\n        return ParseResult(success=True, data=json.loads(raw), error=None)\n    except json.JSONDecodeError as e:\n        return ParseResult(success=False, data=None, error=str(e))\n\ndef store_webhook_event(raw: bytes, db):\n    result = parse_webhook_payload(raw)\n    db.save(\"webhook_events\", result)\n```",
+      "expected_behavior": [
+        "Flags that store_webhook_event persists the ParseResult wrapper itself, not result.data — parse_webhook_payload's return shape changed from the raw payload to a {success, data, error} envelope and this caller was not updated to unwrap it",
+        "Notes that the mismatch holds regardless of outcome: on success the stored row is the wrapper object instead of the parsed payload, and on failure it silently stores a payload-free error record with no failure handling at the call site",
+        "Recommends store_webhook_event branch on result.success and pass result.data (or raise/handle on failure) rather than passing result straight through"
+      ]
     }
   ]
 }
