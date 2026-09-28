@@ -44,6 +44,8 @@ Each taxonomy category gets three sections:
 - For each loop: does it always make progress and terminate?
 - Does the change keep the function total over its input type, or is partiality documented?
 - Does the implementation actually match the spec/PR description's stated intent (the check no linter can do)?
+- ★ **Consumer contract across the diff:** when a change introduces, renames, or changes the signature, return shape, or null/error behavior of a function, helper, or exported value, does every consumer touched by the diff — and elsewhere in the repo, where visible — pass what it now expects and use what it now actually returns? High-yield shapes: a wrapper handed to code that reads the payload (a `safeParse`-style `{success, data, error}` result stored as the value itself, a raw `Response` read as its already-parsed body), two same-typed parameters swapped or an id passed under the wrong name, and a return that became nullable, async, or differently shaped without every call site adjusting.
+- ★ **Guards resolve to their definitions:** before reporting a missing or absent check at a call site, trace the flag, predicate, or early return that actually dominates it back to where it's defined — including a definition introduced or changed elsewhere in this same diff — rather than flagging a guard as missing because its definition isn't adjacent to the use site.
 
 ---
 
