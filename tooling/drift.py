@@ -55,7 +55,22 @@ def check_drift(skills_root: str = "skills", docs_root: str = ".") -> list[Drift
                 raise DriftError(
                     f"{name}: cannot read source {src.path!r}: {exc}"
                 ) from exc
-            current = section_hash(source_text, src.section)
+            # A source section can legitimately disappear from a research doc
+            # after a skill was generated from it -- renumbered during a
+            # taxonomy promotion, or its heading text edited out -- the exact
+            # "the source changed under a generated skill" case this command
+            # exists to catch, not an internal programming error. Left
+            # uncaught, extract_section's KeyError escaped check_drift as a
+            # raw traceback (unlike the OSError/UnicodeDecodeError case just
+            # above, fixed for a missing *file* by #107 but never extended to
+            # a missing *section* within an existing file).
+            try:
+                current = section_hash(source_text, src.section)
+            except KeyError as exc:
+                raise DriftError(
+                    f"{name}: source section #{src.section} not found in "
+                    f"{src.path!r} ({exc}) -- was it renumbered or removed?"
+                ) from exc
             if current != b["hash"]:
                 changed.append(src)
         if changed:

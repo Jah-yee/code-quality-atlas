@@ -130,6 +130,31 @@ def test_drift_missing_source_file_raises_clear_drift_error(tmp_path):
     assert "research_sample.md" in str(exc.value)
 
 
+def test_drift_renumbered_source_section_raises_clear_drift_error(tmp_path):
+    """A source section that was renumbered/removed in the research doc after
+    a skill was generated from it must raise a clear DriftError naming the
+    skill, path, and section -- not a bare KeyError traceback from
+    extract_section (mirrors the sibling missing-file/non-UTF-8 cases above;
+    see issue filed against this exact gap)."""
+    import pytest
+
+    from tooling.drift import DriftError
+
+    generate_skill(_skill(), "v0.2", docs_root=str(ROOT), skills_root=str(tmp_path))
+    # Point docs-root at a copy of the research doc with section #2 renumbered
+    # away, simulating a taxonomy promotion/renumbering after generation.
+    altered = tmp_path / "docs_renumbered"
+    (altered / "tests" / "fixtures").mkdir(parents=True)
+    original = (ROOT / "tests" / "fixtures" / "research_sample.md").read_text()
+    (altered / "tests" / "fixtures" / "research_sample.md").write_text(
+        original.replace("## #2 ", "## #99 ")
+    )
+    with pytest.raises(DriftError) as exc:
+        check_drift(skills_root=str(tmp_path), docs_root=str(altered))
+    assert "hunting-silent-failures" in str(exc.value)
+    assert "#2" in str(exc.value)
+
+
 def test_drift_non_utf8_source_file_raises_clear_drift_error(tmp_path):
     """A source file that exists but isn't valid UTF-8 raises UnicodeDecodeError
     (a ValueError, not an OSError); it must still surface as a clean DriftError."""
