@@ -233,6 +233,47 @@ def test_ci_yml_wires_the_pr_diff_gate_env_vars():
     )
 
 
+# The four purely mechanical paths `session_log_substantive` deliberately
+# excludes from `python` (a path a Dependabot `github-actions`/`pip` bump
+# can touch on its own, per the Major finding this filter split fixed).
+_MECHANICAL_PATHS_EXCLUDED_FROM_SESSION_LOG_GATE = frozenset(
+    {
+        ".github/workflows/ci.yml",
+        "pyproject.toml",
+        ".python-version",
+        ".pre-commit-config.yaml",
+    }
+)
+
+
+def test_session_log_substantive_filter_tracks_python_filter():
+    """`session_log_substantive` is hand-maintained in ci.yml as a copy of
+    `python` minus four mechanical paths (atlas review round 2 on #550,
+    Minor finding) -- a path added to `python` later but not mirrored here
+    would silently make the pull_request gate skip for a PR touching only
+    that new path, the same class of gap the filter split itself fixed.
+    Pins the derived relationship instead of trusting the two
+    hand-maintained lists to stay in sync.
+    """
+    ci = _load_ci_yml()
+    steps = ci["jobs"]["gate"]["steps"]
+    filter_step = next(
+        s for s in steps if s.get("uses", "").startswith("dorny/paths-filter@")
+    )
+    filters = yaml.safe_load(filter_step["with"]["filters"])
+    expected = [
+        p
+        for p in filters["python"]
+        if p not in _MECHANICAL_PATHS_EXCLUDED_FROM_SESSION_LOG_GATE
+    ]
+    assert filters["session_log_substantive"] == expected, (
+        "`session_log_substantive` has drifted from `python` minus the "
+        "mechanical paths in ci.yml -- update it to match (see this test's "
+        "docstring), or add the newly-mechanical path to "
+        "_MECHANICAL_PATHS_EXCLUDED_FROM_SESSION_LOG_GATE above"
+    )
+
+
 def test_session_log_is_current():
     if not _should_enforce_pr_diff_gate():
         pytest.skip(
