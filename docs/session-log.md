@@ -446,3 +446,60 @@ specific session's own system prompt before relying on it.
 `docs/runbooks/pr-review-automation.md`'s §4 (the poll-driven Model B) now
 points at the same guidance for its own dynamically-attached case, keeping
 the two docs in sync.
+
+## 2026-09-28 — #539: a consumer-contract check for `tracing-correctness-and-invariants`
+
+Added two Top-checks-promoted heuristics to cluster-1's #1 category: tracing
+a changed/new interface (signature, return shape, null/error behavior)
+forward to every consumer in the diff, so a mismatch between what a helper
+returns and what a caller reads gets caught; and resolving a guard's
+definition (including one introduced elsewhere in the same diff) before
+reporting it as missing. Found via the #528 benchmark: two independent
+atlas-code-review runs both missed four human-verified goldens on
+calcom/cal.com#11059, all consumer-contract mismatches with both ends in the
+diff (a `safeParse` result persisted as the payload, a raw `Response` read
+as parsed JSON, a `credentialId`/`userId` argument swap). Regenerated
+`SKILL.md`/`reference/heuristics.md`, the collapsed entrypoints, and this
+repo's self-vendored `.claude/skills/` copy; added an eval scenario
+exercising the new check. #539's other validation step — re-running the #528
+benchmark cell on cal.com#11059 — is left for a follow-up session with
+model access to that harness.
+
+## 2026-09-29 (same day) — `tooling.cli drift` crashed on a renumbered/removed source section
+
+`check_drift()` already wrapped a missing/non-UTF-8 source *file* in a
+clean `DriftError` (#107), but a source *section* that disappears from an
+existing research doc — renumbered during a taxonomy promotion, or its
+heading text edited out — still escaped `extract_section` as an uncaught
+`KeyError`, crashing `python -m tooling.cli drift` with a raw traceback
+instead of the clean `ERROR:`/`DRIFT:` reporting every other failure mode
+gets. That's exactly the "the source changed under a generated skill" case
+this command exists to detect, not an internal programming error. Fixed by
+catching the `KeyError` around `section_hash` and re-raising as a
+`DriftError` naming the skill, path, and section; added a regression test
+exercising a renumbered section.
+
+## 2026-10-02 — #548, #549: the session-log currency gate was blocking unrelated PRs on calendar drift alone
+
+The currency gate added by #513/#516 compares `docs/session-log.md`'s
+newest header to today's date on every CI run, with no regard for what the
+current PR actually touched — so once the log went more than `_SLACK_DAYS`
+(5) days stale, *every* open and new PR failed `tests`, including a
+dependency-only Dependabot bump (`#547`, the trigger for #548) that has no
+way to add a session-log entry of its own. #549 was the proximate case: two
+substantive, undocumented commits (`0174a12`/#539 above, `f67435b`'s drift
+fix above) pushed the log 6 days stale, and this entry backs both of them
+in alongside the gate fix itself rather than requiring a separate PR.
+
+Fixed `tests/test_session_log_currency.py::test_session_log_is_current` to
+skip the calendar assertion on a `pull_request` run whose own diff can't
+plausibly be the cause: one that doesn't touch anything in the existing
+`python` paths-filter group, or that already adds a `docs/session-log.md`
+entry in the same diff. `push`/`schedule` runs (and a contributor's local
+`pytest`) keep the original unconditional check — there's no single PR
+diff to blame there, and that's exactly the "many small, individually
+innocent PRs left the log stale" case the calendar check still needs to
+catch. `ci.yml`'s `tests` step now exports `CI_EVENT_NAME` plus a new
+`session_log` paths-filter output (alongside the pre-existing `python` one)
+as `CI_FILTER_PYTHON`/`CI_FILTER_SESSION_LOG` for the test to read; a new
+`test_should_enforce_pr_diff_gate` covers the decision table directly.

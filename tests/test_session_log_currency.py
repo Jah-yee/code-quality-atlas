@@ -19,18 +19,33 @@ sidesteps both problems entirely: for a push-triggered run "today" IS
 a PR run authored around the same time.
 
 This is NOT a perfect per-commit "did *this* commit need an entry" check --
-a dependency-only PR landing after a quiet stretch could trip this through
-no fault of its own, and it says nothing about whether an entry that does
-exist is any good. It's a maintained tripwire against the multi-day silent
-drift the three incidents above actually found, mirroring this repo's
-existing "good enough, mechanically checked" gates (see
+it says nothing about whether an entry that does exist is any good. It's a
+maintained tripwire against the multi-day silent drift the three incidents
+above actually found, mirroring this repo's existing "good enough,
+mechanically checked" gates (see
 tests/test_ci_python_filter_covers_known_reads.py's own docstring for the
 same trade-off made explicitly elsewhere).
+
+A dependency-only PR landing after a quiet stretch used to trip this
+through no fault of its own (#548) -- e.g. a Dependabot bump that touches
+only requirements.txt, days after the log last got an entry from someone
+else's unrelated PR. ci.yml's `tests` step now exports CI_EVENT_NAME plus
+the pre-existing `python`/`session_log` paths-filter outputs as
+CI_FILTER_PYTHON/CI_FILTER_SESSION_LOG; `_should_enforce_pr_diff_gate`
+below uses them to skip the assertion on a `pull_request` run whose own
+diff can't plausibly be the cause -- it doesn't touch anything in the
+`python` filter group, or it already updates docs/session-log.md itself.
+`push`/`schedule` runs (and a contributor's local `pytest`, which sets
+none of these vars) keep the original unconditional calendar check: there
+is no single PR diff to reason about there, and that is exactly the "many
+small, individually-innocent merges left the log stale" case this test
+exists to catch.
 
 Bump _SLACK_DAYS if this fires on a legitimate quiet stretch; do not delete
 or skip the test to silence it.
 """
 
+import os
 import re
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -63,6 +78,26 @@ def _is_stale(last_log_date: date, today: date, slack_days: int = _SLACK_DAYS) -
     return (today - last_log_date).days > slack_days
 
 
+def _should_enforce_pr_diff_gate(env: dict[str, str] | None = None) -> bool:
+    """Decide whether the calendar-staleness assertion applies to this run.
+
+    `push`/`schedule` runs, and any invocation that doesn't set
+    CI_EVENT_NAME at all (a contributor's local `pytest`), always enforce
+    -- unconditional, same as before #548. A `pull_request` run only
+    enforces when its own diff touches something in the `python`
+    paths-filter group (CI_FILTER_PYTHON == "true") without also adding a
+    docs/session-log.md entry in the same diff (CI_FILTER_SESSION_LOG !=
+    "true"); otherwise this PR's own change can't be the cause of the
+    drift and the assertion is skipped.
+    """
+    env = os.environ if env is None else env
+    if env.get("CI_EVENT_NAME") != "pull_request":
+        return True
+    touches_python = env.get("CI_FILTER_PYTHON") == "true"
+    touches_session_log = env.get("CI_FILTER_SESSION_LOG") == "true"
+    return touches_python and not touches_session_log
+
+
 @pytest.mark.parametrize(
     ("last_log_date", "expected", "reason"),
     [
@@ -91,7 +126,56 @@ def test_latest_header_date_picks_the_max_not_the_last_occurrence():
     assert _latest_header_date(text) == date(2026, 9, 10)
 
 
+@pytest.mark.parametrize(
+    ("env", "expected", "reason"),
+    [
+        ({}, True, "no CI_EVENT_NAME (local pytest) always enforces"),
+        (
+            {"CI_EVENT_NAME": "push"},
+            True,
+            "push always enforces regardless of filter outputs",
+        ),
+        (
+            {"CI_EVENT_NAME": "schedule"},
+            True,
+            "schedule always enforces -- no single diff to reason about",
+        ),
+        (
+            {"CI_EVENT_NAME": "pull_request", "CI_FILTER_PYTHON": "false"},
+            False,
+            "PR touching nothing in the python filter group can't be the cause",
+        ),
+        (
+            {
+                "CI_EVENT_NAME": "pull_request",
+                "CI_FILTER_PYTHON": "true",
+                "CI_FILTER_SESSION_LOG": "true",
+            },
+            False,
+            "PR already updates docs/session-log.md itself in the same diff",
+        ),
+        (
+            {
+                "CI_EVENT_NAME": "pull_request",
+                "CI_FILTER_PYTHON": "true",
+                "CI_FILTER_SESSION_LOG": "false",
+            },
+            True,
+            "PR touches substantive code without a session-log entry -- still flagged",
+        ),
+    ],
+)
+def test_should_enforce_pr_diff_gate(env, expected, reason):
+    assert _should_enforce_pr_diff_gate(env) is expected, reason
+
+
 def test_session_log_is_current():
+    if not _should_enforce_pr_diff_gate():
+        pytest.skip(
+            "pull_request run whose own diff doesn't touch a path that "
+            "needs a session-log entry, or that already adds one itself "
+            "-- calendar staleness is still enforced on push/schedule (#548)."
+        )
     text = SESSION_LOG.read_text(encoding="utf-8")
     last = _latest_header_date(text)
     # UTC, matching this repo's other date-stamped automation (the weekly

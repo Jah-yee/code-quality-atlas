@@ -223,6 +223,14 @@ jobs:
             requirements:
               - "requirements.in"
               - "requirements.txt"
+            # Separate from `python` above (which also lists this same path,
+            # #513/#516): `python` answers "did anything that might need a
+            # session-log entry change", this answers "did the entry itself
+            # get added" -- tests/test_session_log_currency.py's pull_request
+            # gate (#548) needs both to tell a dependency-only/doc-only PR
+            # apart from a substantive one that forgot the entry.
+            session_log:
+              - "docs/session-log.md"
             shell:
               - "tooling/**/*.sh"
               - "hooks/**"
@@ -353,6 +361,22 @@ jobs:
         # Coverage settings (branch mode, the fail-under floor) live in
         # pyproject.toml's [tool.coverage] tables so a contributor running
         # `pytest --cov=tooling` locally gets the same gate CI enforces.
+        #
+        # The three CI_* vars are read only by
+        # tests/test_session_log_currency.py's pull_request gate (#548): a
+        # PR whose own diff doesn't touch a `python`-filtered path (a
+        # dependency-only bump, a shell-only change) or that already
+        # updates docs/session-log.md itself can't be the cause of calendar
+        # staleness, so that one test skips the assertion instead of
+        # failing an unrelated PR. Unset (hence unconditional, original
+        # behaviour) for `push`/`schedule` and for a contributor's local
+        # `pytest` run -- there's no single PR diff to reason about there,
+        # which is exactly the "many small innocent merges left the log
+        # stale" case the calendar check still needs to catch.
+        env:
+          CI_EVENT_NAME: ${{ github.event_name }}
+          CI_FILTER_PYTHON: ${{ steps.filter.outputs.python }}
+          CI_FILTER_SESSION_LOG: ${{ steps.filter.outputs.session_log }}
         run: python -m pytest tests/ -q --cov=tooling
       - name: eval structure (all skills)
         if: steps.filter.outputs.python == 'true' || steps.filter.outputs.requirements == 'true'
