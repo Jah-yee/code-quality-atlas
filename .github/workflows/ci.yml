@@ -223,14 +223,44 @@ jobs:
             requirements:
               - "requirements.in"
               - "requirements.txt"
-            # Separate from `python` above (which also lists this same path,
-            # #513/#516): `python` answers "did anything that might need a
-            # session-log entry change", this answers "did the entry itself
-            # get added" -- tests/test_session_log_currency.py's pull_request
-            # gate (#548) needs both to tell a dependency-only/doc-only PR
-            # apart from a substantive one that forgot the entry.
-            session_log:
+            # tests/test_session_log_currency.py's pull_request gate (#548)
+            # reads this to decide whether a PR's own diff could plausibly
+            # need a session-log entry. Deliberately NARROWER than `python`
+            # above: `python` also answers "does the tests/lint/mypy job need
+            # to run at all" and so includes purely mechanical/meta paths
+            # (`.github/workflows/ci.yml`, `pyproject.toml`, `.python-version`,
+            # `.pre-commit-config.yaml`) that a Dependabot `github-actions`
+            # pin bump touches on its own -- reusing `python` verbatim here
+            # left exactly that case still failing the gate (atlas review
+            # round 1 on #550: a weekly actions-pin bump edits `ci.yml`,
+            # which is in `python`, so it still tripped the calendar check).
+            # Same list as `python` minus those four mechanical paths.
+            session_log_substantive:
+              - "skills/**"
+              - "collapsed/**"
+              - "tooling/**"
+              - "tests/**"
+              - "docs/research/**"
+              - "commands/**"
+              - "templates/**"
+              - "docs/map/**"
+              - "hooks/**"
+              - ".claude/skills/**"
+              - "AGENTS.md"
+              - "CLAUDE.md"
+              - "README.md"
+              - "REVIEW.md"
+              - "LICENSE*"
+              - ".claude-plugin/plugin.json"
+              - ".claude-plugin/marketplace.json"
+              - "docs/distribution.md"
+              - "docs/install.md"
+              - "docs/collapsed-entrypoints-and-depth-modes.md"
+              - "docs/review-depth-modes.md"
+              - "docs/open-questions.md"
               - "docs/session-log.md"
+              - "docs/runbooks/pr-review-automation.md"
+              - "*.py"
             shell:
               - "tooling/**/*.sh"
               - "hooks/**"
@@ -362,21 +392,25 @@ jobs:
         # pyproject.toml's [tool.coverage] tables so a contributor running
         # `pytest --cov=tooling` locally gets the same gate CI enforces.
         #
-        # The three CI_* vars are read only by
+        # The two CI_* vars are read only by
         # tests/test_session_log_currency.py's pull_request gate (#548): a
-        # PR whose own diff doesn't touch a `python`-filtered path (a
-        # dependency-only bump, a shell-only change) or that already
-        # updates docs/session-log.md itself can't be the cause of calendar
-        # staleness, so that one test skips the assertion instead of
-        # failing an unrelated PR. Unset (hence unconditional, original
-        # behaviour) for `push`/`schedule` and for a contributor's local
-        # `pytest` run -- there's no single PR diff to reason about there,
-        # which is exactly the "many small innocent merges left the log
-        # stale" case the calendar check still needs to catch.
+        # PR whose own diff doesn't touch a `session_log_substantive`-filtered
+        # path (a dependency bump -- Python *or* a `github-actions` pin --, a
+        # shell-only change, ...) can't be the cause of calendar staleness, so
+        # that one test skips the assertion instead of failing an unrelated
+        # PR. A PR that DOES touch a substantive path still enforces even if
+        # it also edits docs/session-log.md in the same diff -- touching the
+        # file proves nothing about whether the edit added a *current* entry,
+        # only the existing `last <= today`/`not stale` assertions can tell
+        # (atlas + Copilot review round 1 on #550). Both vars are unset
+        # (hence unconditional, original behaviour) for `push`/`schedule` and
+        # for a contributor's local `pytest` run -- there's no single PR diff
+        # to reason about there, which is exactly the "many small innocent
+        # merges left the log stale" case the calendar check still needs to
+        # catch.
         env:
           CI_EVENT_NAME: ${{ github.event_name }}
-          CI_FILTER_PYTHON: ${{ steps.filter.outputs.python }}
-          CI_FILTER_SESSION_LOG: ${{ steps.filter.outputs.session_log }}
+          CI_FILTER_SESSION_LOG_SUBSTANTIVE: ${{ steps.filter.outputs.session_log_substantive }}
         run: python -m pytest tests/ -q --cov=tooling
       - name: eval structure (all skills)
         if: steps.filter.outputs.python == 'true' || steps.filter.outputs.requirements == 'true'

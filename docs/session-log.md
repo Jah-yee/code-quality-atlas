@@ -465,7 +465,7 @@ exercising the new check. #539's other validation step — re-running the #528
 benchmark cell on cal.com#11059 — is left for a follow-up session with
 model access to that harness.
 
-## 2026-09-29 (same day) — `tooling.cli drift` crashed on a renumbered/removed source section
+## 2026-09-29 — `tooling.cli drift` crashed on a renumbered/removed source section
 
 `check_drift()` already wrapped a missing/non-UTF-8 source *file* in a
 clean `DriftError` (#107), but a source *section* that disappears from an
@@ -492,14 +492,25 @@ fix above) pushed the log 6 days stale, and this entry backs both of them
 in alongside the gate fix itself rather than requiring a separate PR.
 
 Fixed `tests/test_session_log_currency.py::test_session_log_is_current` to
-skip the calendar assertion on a `pull_request` run whose own diff can't
-plausibly be the cause: one that doesn't touch anything in the existing
-`python` paths-filter group, or that already adds a `docs/session-log.md`
-entry in the same diff. `push`/`schedule` runs (and a contributor's local
-`pytest`) keep the original unconditional check — there's no single PR
-diff to blame there, and that's exactly the "many small, individually
-innocent PRs left the log stale" case the calendar check still needs to
-catch. `ci.yml`'s `tests` step now exports `CI_EVENT_NAME` plus a new
-`session_log` paths-filter output (alongside the pre-existing `python` one)
-as `CI_FILTER_PYTHON`/`CI_FILTER_SESSION_LOG` for the test to read; a new
-`test_should_enforce_pr_diff_gate` covers the decision table directly.
+skip the calendar assertion on a `pull_request` run whose own diff doesn't
+touch anything in a new, dedicated `session_log_substantive` paths-filter
+group. Two review rounds (atlas self-review and `copilot-pull-request-
+reviewer`) on the fix's own PR (#550) each caught a real gap in the first
+cut: reusing the existing `python` filter left a `github-actions`-ecosystem
+Dependabot pin bump (which edits `ci.yml`, one of `python`'s paths) still
+tripping the gate — exactly the #548 failure, unsolved for that case — so
+`session_log_substantive` is the same list minus `ci.yml`/`pyproject.toml`/
+`.python-version`/`.pre-commit-config.yaml`. And a first cut's "skip if the
+PR also touches docs/session-log.md" escape hatch let a substantive PR
+bypass enforcement by editing the file without adding a *current* entry;
+dropped in favor of relying on the existing `last <= today`/`not stale`
+assertions, which already pass on their own once a PR's own entry is
+current. `push`/`schedule` runs (and a contributor's local `pytest`) keep
+the original unconditional check — there's no single PR diff to blame
+there, and that's exactly the "many small, individually innocent PRs left
+the log stale" case the calendar check still needs to catch. `ci.yml`'s
+`tests` step now exports `CI_EVENT_NAME` plus the new filter's output as
+`CI_FILTER_SESSION_LOG_SUBSTANTIVE`; `test_should_enforce_pr_diff_gate`
+covers the decision table directly, and a new
+`test_ci_yml_wires_the_pr_diff_gate_env_vars` pins the wiring itself so a
+future rename can't silently disable the gate on every PR.
