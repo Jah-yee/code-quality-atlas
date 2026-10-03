@@ -4,9 +4,10 @@ description: >-
   routing block into the repo's CLAUDE.md and AGENTS.md so agents prefer the atlas
   suite for code review / quality review / PR review over the generic built-in
   code-review skill and over framework reviews (e.g. BMAD), combining them
-  non-exclusively. Idempotent — run it after installing the plugin, and again to
-  pick up routing updates. Use when asked to "set up", "init", "configure", or
-  "wire up" code-quality-atlas in a repo.
+  non-exclusively. Also gitignores the plugin's per-session lens-coverage state.
+  Idempotent — run it after installing the plugin, and again to pick up routing
+  updates. Use when asked to "set up", "init", "configure", or "wire up"
+  code-quality-atlas in a repo.
 argument-hint: "(no arguments)"
 allowed-tools: Read, Edit, Write, Bash, Glob
 ---
