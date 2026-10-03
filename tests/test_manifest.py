@@ -140,6 +140,15 @@ def test_source_with_nonnumeric_fragment_raises_clear_error():
         Source(category=2, source="docs/research/cluster-1-correctness.md#two")
 
 
+def test_source_rejects_bool_category():
+    # bool is a subtype of int in Python (True == 1), so an unguarded category
+    # would let `category: true` silently pass the `!=` comparison against a
+    # real section 1 instead of raising -- the same class of gotcha already
+    # guarded against for Skill.wave/.eval_min.
+    with pytest.raises(ValueError, match="category must be an integer, got bool"):
+        Source(category=True, source="docs/research/cluster-1-correctness.md#1")
+
+
 def _write_manifest(tmp_path, text):
     p = tmp_path / "manifest.yaml"
     p.write_text(text, encoding="utf-8")
@@ -1243,6 +1252,47 @@ def test_load_manifest_rejects_a_non_string_artifact_name_or_detect(tmp_path):
         "      - { name: 7, detect: y, rubric: 2, slug: x }\n",
     )
     with pytest.raises(ValidationError, match="'name' must be a string, got int"):
+        load_manifest(path)
+
+
+def test_load_manifest_rejects_a_bool_built_from_category(tmp_path):
+    # bool is a subtype of int in Python (True == 1); an unguarded `category`
+    # would let `category: true` silently resolve as category 1 instead of
+    # raising -- see Source.__post_init__'s isinstance(..., bool) guard.
+    path = _write_manifest(
+        tmp_path,
+        "taxonomy_version: v0.2\n"
+        "skills:\n"
+        "  - name: hunting-silent-failures\n"
+        "    description: x\n"
+        "    shape: diff\n"
+        "    wave: 1\n"
+        "    picker: p\n"
+        "    built_from:\n"
+        '      - { category: true, source: "tests/fixtures/research_sample.md#1" }\n',
+    )
+    with pytest.raises(ValidationError, match="category must be an integer, got bool"):
+        load_manifest(path)
+
+
+def test_load_manifest_rejects_a_bool_artifact_rubric(tmp_path):
+    # Same bool-is-a-subtype-of-int gotcha, for the artifact-table sibling
+    # field: an unguarded `rubric: true` would silently match category 1 in
+    # _validate_skill_artifacts's `in built_cats` check.
+    path = _write_manifest(
+        tmp_path,
+        "taxonomy_version: v0.2\n"
+        "skills:\n"
+        "  - name: reviewing-artifact-conventions\n"
+        "    description: x\n"
+        "    shape: artifact\n"
+        "    wave: 1\n"
+        "    built_from:\n" + _BUILT_FROM_LINE + "    artifacts:\n"
+        "      - { name: X, detect: y, rubric: true, slug: x }\n",
+    )
+    with pytest.raises(
+        ValidationError, match="artifact rubric must be an integer, got bool"
+    ):
         load_manifest(path)
 
 

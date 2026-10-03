@@ -18,6 +18,23 @@ class Source:
     source: str  # "<path>#<n>"
 
     def __post_init__(self) -> None:
+        # bool is a subtype of int in Python (`True == 1`), so a YAML `category:
+        # true`/`yes`/`on` typo would otherwise sail through the `!=` comparison
+        # below as if it were category 1 -- silently resolving to the wrong
+        # research section with no error, rather than the loud, actionable
+        # ValidationError every other malformed manifest field gets (see the
+        # identical isinstance(..., bool) guard already applied to Skill.wave
+        # and Skill.eval_min in _load_skills, for the exact same reason).
+        if not isinstance(self.category, int) or isinstance(self.category, bool):
+            # ValueError, not TypeError, so _load_skills's existing `except
+            # ValueError` wraps this into a ValidationError prefixed with
+            # "skill #{i}: " like every other malformed-source case in this
+            # method -- matching the deliberate ValueError choice run_evals.py
+            # already documents for the same reason (pyproject.toml's TRY004
+            # comment).
+            raise ValueError(  # noqa: TRY004
+                f"category must be an integer, got {type(self.category).__name__}"
+            )
         # Validate the "<path>#<n>" shape up front so a malformed source raises a
         # clear error here rather than a bare IndexError/ValueError later in .section.
         if "#" not in self.source:
@@ -867,17 +884,30 @@ def _load_skills(data: dict, path: str) -> list[Skill]:
             built = [
                 Source(category=b["category"], source=b["source"]) for b in raw_built
             ]
-            artifacts = [
-                Artifact(
-                    name=_prose(a, "name", f"skill #{i} artifact"),
-                    detect=_prose(a, "detect", f"skill #{i} artifact"),
-                    rubric=a["rubric"],
-                    slug=_prose(
-                        a, "slug", f"skill #{i} artifact", null_ok=True, strip=False
-                    ),
+            artifacts = []
+            for a in _list_field(s, "artifacts", f"skill #{i}"):
+                rubric = a["rubric"]
+                # Same bool-is-a-subtype-of-int gotcha as Source.category above:
+                # an unguarded `rubric` would let `rubric: true` silently match
+                # category 1 in _validate_skill_artifacts's `in built_cats` check
+                # instead of raising. Checked here (the parse boundary) rather
+                # than in the plain Artifact dataclass, mirroring how `wave`/
+                # `eval_min` are validated in this same function.
+                if not isinstance(rubric, int) or isinstance(rubric, bool):
+                    raise ValidationError(
+                        f"skill #{i}: artifact rubric must be an integer, "
+                        f"got {type(rubric).__name__}"
+                    )
+                artifacts.append(
+                    Artifact(
+                        name=_prose(a, "name", f"skill #{i} artifact"),
+                        detect=_prose(a, "detect", f"skill #{i} artifact"),
+                        rubric=rubric,
+                        slug=_prose(
+                            a, "slug", f"skill #{i} artifact", null_ok=True, strip=False
+                        ),
+                    )
                 )
-                for a in _list_field(s, "artifacts", f"skill #{i}")
-            ]
             wave = s.get("wave", 0)
             if not isinstance(wave, int) or isinstance(wave, bool):
                 raise ValidationError(
