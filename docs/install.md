@@ -349,6 +349,10 @@ matching the install sections above:
   `<!-- BEGIN code-quality-atlas routing -->` / `<!-- END code-quality-atlas
   routing -->` markers (inclusive) from both files by hand, and commit the
   change alongside whichever channel's own removal above you're doing.
+  `/atlas-init` also appends a `.claude/.atlas-lens-coverage/` entry to
+  `.gitignore` (issue #551); this isn't removed by the routing-block deletion
+  above and is harmless to leave even without the plugin installed, so no
+  action is needed there either.
 - **Account skills on claude.ai.** Remove each uploaded skill from Settings →
   Features individually — there is no bulk-delete confirmed for this GUI, the
   same asymmetry noted for the upload side in

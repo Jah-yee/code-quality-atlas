@@ -4,9 +4,10 @@ description: >-
   routing block into the repo's CLAUDE.md and AGENTS.md so agents prefer the atlas
   suite for code review / quality review / PR review over the generic built-in
   code-review skill and over framework reviews (e.g. BMAD), combining them
-  non-exclusively. Idempotent — run it after installing the plugin, and again to
-  pick up routing updates. Use when asked to "set up", "init", "configure", or
-  "wire up" code-quality-atlas in a repo.
+  non-exclusively. Also gitignores the plugin's per-session lens-coverage state.
+  Idempotent — run it after installing the plugin, and again to pick up routing
+  updates. Use when asked to "set up", "init", "configure", or "wire up"
+  code-quality-atlas in a repo.
 argument-hint: "(no arguments)"
 allowed-tools: Read, Edit, Write, Bash, Glob
 ---
@@ -98,7 +99,35 @@ For **each** of `CLAUDE.md` and `AGENTS.md`:
 
 Never duplicate the block. Match on the marker, not on the heading text.
 
-## 4. (Optional) Uninstalling
+## 4. Ignore per-session lens-coverage state
+
+The plugin install path registers `track-lens-reads.sh` via `hooks/hooks.json`,
+which writes one per-session state file to
+`.claude/.atlas-lens-coverage/<session_id>.txt` in the **consumer** repo on
+every session that loads a lens — regardless of whether `lens-coverage-gate`
+is turned on. Nothing in the plugin path previously told the consumer repo to
+ignore this, so each review session left a new untracked file in the working
+tree (issue #551).
+
+For the target repo's `.gitignore`:
+
+- If the file doesn't already contain the exact line
+  `.claude/.atlas-lens-coverage/`, append it — preceded by a blank line if the
+  file is non-empty — using the same comment
+  `tooling/vendor-skills.sh`'s `vendor_lens_coverage_hook` writes for the
+  vendoring path, so both paths converge on identical wording instead of two
+  near-duplicate entries:
+
+  ```gitignore
+  # Per-session lens-coverage state (code-quality-atlas hooks/lens-coverage/) -- ephemeral, never committed
+  .claude/.atlas-lens-coverage/
+  ```
+
+- If that exact line is already present anywhere in the file, leave it
+  untouched — don't add a second entry.
+- Create `.gitignore` if it does not exist.
+
+## 5. (Optional) Uninstalling
 
 If the user asks to remove code-quality-atlas routing from this repo (rather
 than install or refresh it) — issue #389, this command previously had no
@@ -109,12 +138,14 @@ routing -->` markers, inclusive, leaving the rest of the file untouched — the
 mirror image of step 3's "Block already present" replacement. If deleting the
 block leaves a file with nothing else in it, ask the user whether to delete
 the file too rather than doing so unprompted. This only removes the routing
-block this command wrote; it does not touch a vendored `.claude/skills/` copy
-(`tooling/vendor-skills.sh <target-repo-dir> --uninstall`), an installed
-plugin (`/plugin uninstall`), or any of the other channels — see
-`docs/install.md`'s "Uninstalling" section for the full per-channel list.
+block this command wrote; it does not touch the `.gitignore` entry from step 4
+(harmless to leave even without the plugin installed), a vendored
+`.claude/skills/` copy (`tooling/vendor-skills.sh <target-repo-dir>
+--uninstall`), an installed plugin (`/plugin uninstall`), or any of the other
+channels — see `docs/install.md`'s "Uninstalling" section for the full
+per-channel list.
 
-## 5. (Optional) PR-automation policy
+## 6. (Optional) PR-automation policy
 
 If this repo runs the hands-off PR reviewer (`/atlas-review-pr` on a schedule or
 trigger) and has no `REVIEW.md` at its root, mention that copying
@@ -122,7 +153,7 @@ trigger) and has no `REVIEW.md` at its root, mention that copying
 policy (see `docs/runbooks/pr-review-automation.md`). Only copy it if the user
 asks — it is not needed for interactive review.
 
-## 6. (Optional) Team preferences overlay
+## 7. (Optional) Team preferences overlay
 
 If the user wants to start recording the team's own ratified opinions — house
 conventions a lens would otherwise nag against, threshold tweaks, scoped
@@ -145,9 +176,10 @@ command's per-item ratification rule). It has no effect on floor-tier findings
 (security, correctness, migration/data safety, concurrency) beyond
 `acknowledge`, which keeps them visible and non-blocking, never silent.
 
-## 7. Report
+## 8. Report
 
 Summarize what changed: for each file, whether it was created, had its block
 inserted, or had an existing block refreshed (and note "no change" if the block
-was already current). Show the user the inserted/updated block once so they can
-see what landed.
+was already current). Also report whether `.gitignore` was created, appended
+to, or already had the lens-coverage entry. Show the user the inserted/updated
+block once so they can see what landed.
