@@ -64,6 +64,10 @@ def check_drift(skills_root: str = "skills", docs_root: str = ".") -> list[Drift
                 raise DriftError(
                     f"{name}: malformed built_from entry {b!r}: {exc}"
                 ) from exc
+            except TypeError as exc:
+                raise DriftError(
+                    f"{name}: malformed built_from entry {b!r}: expected dict, got {type(b).__name__}"
+                ) from exc
             # A renamed/missing source file (OSError) or one that isn't valid
             # UTF-8 (UnicodeDecodeError, a ValueError subclass — not an OSError)
             # would otherwise escape with no skill/path context; surface both as

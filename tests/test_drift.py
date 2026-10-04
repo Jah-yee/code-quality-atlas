@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: MIT
 # tests/test_drift.py
+import pytest
 from pathlib import Path
+
+from tooling.drift import DriftError
 
 from tooling.drift import DriftReport, check_drift
 from tooling.generate_skill import generate_skill
@@ -218,6 +221,38 @@ def test_drift_built_from_entry_bool_category_raises_clear_drift_error(tmp_path)
         '      source: "tests/fixtures/research_sample.md#2"\n'
         '      hash: "deadbeef"\n'
         "---\n\nbody\n"
+    )
+    with pytest.raises(DriftError) as exc:
+        check_drift(skills_root=str(tmp_path), docs_root=str(ROOT))
+    assert "broken" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "entry_yaml",
+    [
+        # built_from entry is a bare string, not a dict
+        '    - "not-a-dict"',
+        # built_from entry is a number
+        "    - 123",
+        # built_from entry is null
+        "    - null",
+    ],
+)
+def test_drift_built_from_non_dict_entry_raises_clear_drift_error(tmp_path, entry_yaml):
+    """A built_from entry that is not a dict (string/number/null/bool) must raise
+    a clear DriftError naming the skill and the type received, not a bare
+    TypeError escaping with no skill context."""
+    from tooling.drift import DriftError
+
+    skill_dir = tmp_path / "broken"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\n"
+        "name: broken\n"
+        "provenance:\n"
+        "  built_from:\n"
+        + entry_yaml
+        + "\n---\n\nbody\n"
     )
     with pytest.raises(DriftError) as exc:
         check_drift(skills_root=str(tmp_path), docs_root=str(ROOT))
