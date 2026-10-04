@@ -35,7 +35,13 @@ def _read_provenance(skill_md: Path) -> tuple[str, list[dict]]:
         raise ValueError(
             f"{skill_md}: frontmatter must define `name` and `provenance.built_from`"
         )
-    return front["name"], front["provenance"]["built_from"]
+    built_from = front["provenance"]["built_from"]
+    if not isinstance(built_from, list):
+        raise ValueError(
+            f"{skill_md}: `provenance.built_from` must be a list, "
+            f"got {type(built_from).__name__}"
+        )
+    return front["name"], built_from
 
 
 def check_drift(skills_root: str = "skills", docs_root: str = ".") -> list[DriftReport]:
@@ -53,6 +59,22 @@ def check_drift(skills_root: str = "skills", docs_root: str = ".") -> list[Drift
             # not a bare KeyError/ValueError traceback with no skill context
             # (mirrors the missing-source-file and renumbered-section guards
             # just below, and issue #107's original fix for this same function).
+            #
+            # Shape checks are separated from field validation so each case
+            # gets its own accurate message (a non-dict entry vs. a dict entry
+            # with a non-string `source` are different problems, and conflating
+            # them under a blanket `except TypeError` produced messages like
+            # "expected dict, got dict" for `source: 5` -- see issue #555).
+            if not isinstance(b, dict):
+                raise DriftError(
+                    f"{name}: malformed built_from entry {b!r}: "
+                    f"expected a mapping, got {type(b).__name__}"
+                )
+            if not isinstance(b.get("source"), str):
+                raise DriftError(
+                    f"{name}: malformed built_from entry {b!r}: "
+                    f"`source` must be a string, got {type(b.get('source')).__name__}"
+                )
             try:
                 src = Source(category=b["category"], source=b["source"])
                 expected_hash = b["hash"]
@@ -63,10 +85,6 @@ def check_drift(skills_root: str = "skills", docs_root: str = ".") -> list[Drift
             except ValueError as exc:
                 raise DriftError(
                     f"{name}: malformed built_from entry {b!r}: {exc}"
-                ) from exc
-            except TypeError as exc:
-                raise DriftError(
-                    f"{name}: malformed built_from entry {b!r}: expected dict, got {type(b).__name__}"
                 ) from exc
             # A renamed/missing source file (OSError) or one that isn't valid
             # UTF-8 (UnicodeDecodeError, a ValueError subclass — not an OSError)
