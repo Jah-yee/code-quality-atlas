@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: MIT
 # tests/test_drift.py
-import pytest
 from pathlib import Path
+
+import pytest
 
 from tooling.drift import DriftReport, check_drift
 from tooling.generate_skill import generate_skill
