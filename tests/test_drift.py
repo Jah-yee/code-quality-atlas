@@ -172,3 +172,53 @@ def test_drift_non_utf8_source_file_raises_clear_drift_error(tmp_path):
     with pytest.raises(DriftError) as exc:
         check_drift(skills_root=str(tmp_path), docs_root=str(bad_docs))
     assert "hunting-silent-failures" in str(exc.value)
+
+
+def test_drift_built_from_entry_missing_hash_raises_clear_drift_error(tmp_path):
+    """A built_from entry missing its `hash` field must raise a clear
+    DriftError naming the skill, not a bare KeyError traceback."""
+    import pytest
+
+    from tooling.drift import DriftError
+
+    skill_dir = tmp_path / "broken"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\n"
+        "name: broken\n"
+        "provenance:\n"
+        "  built_from:\n"
+        "    - category: 2\n"
+        '      source: "tests/fixtures/research_sample.md#2"\n'
+        "---\n\nbody\n"
+    )
+    with pytest.raises(DriftError) as exc:
+        check_drift(skills_root=str(tmp_path), docs_root=str(ROOT))
+    assert "broken" in str(exc.value)
+    assert "hash" in str(exc.value)
+
+
+def test_drift_built_from_entry_bool_category_raises_clear_drift_error(tmp_path):
+    """A built_from entry whose `category` is a bool (a subtype of int in
+    Python, so it would otherwise silently masquerade as category 1) must
+    raise a clear DriftError naming the skill, not a bare ValueError escaping
+    with no skill context."""
+    import pytest
+
+    from tooling.drift import DriftError
+
+    skill_dir = tmp_path / "broken"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\n"
+        "name: broken\n"
+        "provenance:\n"
+        "  built_from:\n"
+        "    - category: true\n"
+        '      source: "tests/fixtures/research_sample.md#2"\n'
+        '      hash: "deadbeef"\n'
+        "---\n\nbody\n"
+    )
+    with pytest.raises(DriftError) as exc:
+        check_drift(skills_root=str(tmp_path), docs_root=str(ROOT))
+    assert "broken" in str(exc.value)

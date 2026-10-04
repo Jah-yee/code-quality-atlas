@@ -44,7 +44,26 @@ def check_drift(skills_root: str = "skills", docs_root: str = ".") -> list[Drift
         name, built_from = _read_provenance(skill_md)
         changed: list[Source] = []
         for b in built_from:
-            src = Source(category=b["category"], source=b["source"])
+            # A built_from entry missing `category`/`source`/`hash` (KeyError), or
+            # one whose `category`/`source` is malformed enough for Source's own
+            # validation to reject it (ValueError -- e.g. a bool category, which
+            # is a subtype of int in Python and would otherwise silently
+            # masquerade as category 1), must surface as a DriftError naming the
+            # skill, like every other malformed-input case in this function --
+            # not a bare KeyError/ValueError traceback with no skill context
+            # (mirrors the missing-source-file and renumbered-section guards
+            # just below, and issue #107's original fix for this same function).
+            try:
+                src = Source(category=b["category"], source=b["source"])
+                expected_hash = b["hash"]
+            except KeyError as exc:
+                raise DriftError(
+                    f"{name}: malformed built_from entry {b!r}: missing field {exc}"
+                ) from exc
+            except ValueError as exc:
+                raise DriftError(
+                    f"{name}: malformed built_from entry {b!r}: {exc}"
+                ) from exc
             # A renamed/missing source file (OSError) or one that isn't valid
             # UTF-8 (UnicodeDecodeError, a ValueError subclass — not an OSError)
             # would otherwise escape with no skill/path context; surface both as
@@ -71,7 +90,7 @@ def check_drift(skills_root: str = "skills", docs_root: str = ".") -> list[Drift
                     f"{name}: source section #{src.section} not found in "
                     f"{src.path!r} ({exc}) -- was it renumbered or removed?"
                 ) from exc
-            if current != b["hash"]:
+            if current != expected_hash:
                 changed.append(src)
         if changed:
             reports.append(DriftReport(skill=name, changed=changed))
