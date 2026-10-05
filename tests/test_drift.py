@@ -309,5 +309,5 @@ def test_drift_built_from_not_a_list_raises_clear_error(tmp_path):
     (skill_dir / "SKILL.md").write_text(
         "---\nname: broken\nprovenance:\n  built_from: 7\n---\n\nbody\n"
     )
-    with pytest.raises(ValueError, match="built_from"):
+    with pytest.raises(TypeError, match="built_from"):
         check_drift(skills_root=str(tmp_path), docs_root=str(ROOT))

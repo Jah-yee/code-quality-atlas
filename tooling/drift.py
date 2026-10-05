@@ -37,7 +37,7 @@ def _read_provenance(skill_md: Path) -> tuple[str, list[dict]]:
         )
     built_from = front["provenance"]["built_from"]
     if not isinstance(built_from, list):
-        raise ValueError(
+        raise TypeError(
             f"{skill_md}: `provenance.built_from` must be a list, "
             f"got {type(built_from).__name__}"
         )
