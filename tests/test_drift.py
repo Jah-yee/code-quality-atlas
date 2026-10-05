@@ -299,6 +299,30 @@ def test_drift_built_from_non_string_source_raises_clear_drift_error(
     assert expected_type in str(exc.value)
 
 
+def test_drift_built_from_entry_missing_source_raises_clear_drift_error(tmp_path):
+    """A built_from entry missing its `source` field must raise a clear
+    DriftError naming the missing field, not a type-error about NoneType."""
+    import pytest
+
+    from tooling.drift import DriftError
+
+    skill_dir = tmp_path / "broken"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\n"
+        "name: broken\n"
+        "provenance:\n"
+        "  built_from:\n"
+        "    - category: research\n"
+        '      hash: "abc123def456"\n'
+        "---\n\nbody\n"
+    )
+    with pytest.raises(DriftError) as exc:
+        check_drift(skills_root=str(tmp_path), docs_root=str(ROOT))
+    assert "broken" in str(exc.value)
+    assert "source" in str(exc.value)
+
+
 def test_drift_built_from_not_a_list_raises_clear_error(tmp_path):
     """`provenance.built_from` that is not a list (e.g. a bare dict or number)
     must raise a clear ValueError, not a raw TypeError from iteration."""

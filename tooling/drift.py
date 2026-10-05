@@ -70,10 +70,10 @@ def check_drift(skills_root: str = "skills", docs_root: str = ".") -> list[Drift
                     f"{name}: malformed built_from entry {b!r}: "
                     f"expected a mapping, got {type(b).__name__}"
                 )
-            if not isinstance(b.get("source"), str):
+            if "source" in b and not isinstance(b["source"], str):
                 raise DriftError(
                     f"{name}: malformed built_from entry {b!r}: "
-                    f"`source` must be a string, got {type(b.get('source')).__name__}"
+                    f"`source` must be a string, got {type(b['source']).__name__}"
                 )
             try:
                 src = Source(category=b["category"], source=b["source"])
