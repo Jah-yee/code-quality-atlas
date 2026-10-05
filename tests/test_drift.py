@@ -325,7 +325,7 @@ def test_drift_built_from_entry_missing_source_raises_clear_drift_error(tmp_path
 
 def test_drift_built_from_not_a_list_raises_clear_error(tmp_path):
     """`provenance.built_from` that is not a list (e.g. a bare dict or number)
-    must raise a clear ValueError, not a raw TypeError from iteration."""
+    must raise a clear TypeError, not a raw TypeError from iteration."""
     import pytest
 
     skill_dir = tmp_path / "broken"
